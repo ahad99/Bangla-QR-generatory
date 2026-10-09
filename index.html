@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pathao Pay Static QR Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0f0ee;
+    --surface: #ffffff;
+    --surface-alt: #f7f7f6;
+    --border: #e4e4e0;
+    --border-strong: #d0d0cc;
+    --text: #1a1a18;
+    --text-secondary: #6b6b67;
+    --text-muted: #a0a09c;
+    --accent: #1e6ef5;
+    --accent-hover: #1558d6;
+    --accent-bg: #eff4ff;
+    --accent-text: #1549b8;
+    --success-bg: #f0fdf4;
+    --success-text: #15803d;
+    --radius: 8px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-logo {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .topbar-logo svg { width: 16px; height: 16px; fill: #fff; }
+  .topbar-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .topbar-sub   { font-size: 13px; color: var(--text-muted); margin-left: 2px; }
+  .topbar-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--success-bg);
+    color: var(--success-text);
+  }
+
+  /* ── 50/50 layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    min-height: calc(100vh - 56px);
+    align-items: start;
+  }
+
+  /* ── Left: form panel ── */
+  .form-panel {
+    padding: 2rem;
+    overflow-y: auto;
+  }
+
+  .section-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .full { grid-column: 1 / -1; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  input, select {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13.5px;
+    font-family: inherit;
+    width: 100%;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(30,110,245,.1);
+  }
+  input::placeholder { color: var(--text-muted); }
+  .hint { font-size: 11px; color: var(--text-muted); }
+
+  .btn-generate {
+    width: 100%;
+    height: 42px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+    letter-spacing: .01em;
+  }
+  .btn-generate:hover  { background: var(--accent-hover); }
+  .btn-generate:active { transform: scale(0.99); }
+
+  /* ── Right: QR panel ── */
+  .qr-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    min-height: calc(100vh - 56px);
+    position: sticky;
+    top: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    gap: 1.25rem;
+  }
+
+  /* Empty state */
+  .qr-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .qr-empty-icon {
+    width: 64px; height: 64px;
+    border: 2px dashed var(--border-strong);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .qr-empty-icon svg { width: 28px; height: 28px; stroke: var(--text-muted); fill: none; }
+  .qr-empty h3 { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+  .qr-empty p  { font-size: 12px; color: var(--text-muted); max-width: 180px; }
+
+  /* QR result */
+  .qr-result { display: none; width: 100%; flex-direction: column; align-items: center; gap: 1.25rem; }
+  .qr-result.visible { display: flex; }
+
+  .qr-box {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.07);
+  }
+  #qr-target canvas, #qr-target img { display: block; border-radius: 4px; }
+
+  .merchant-badge { text-align: center; }
+  .merchant-badge .mname { font-size: 16px; font-weight: 700; color: var(--text); }
+  .merchant-badge .msub  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Meta tiles */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .meta-tile {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 11px;
+  }
+  .meta-tile .mk {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+  .meta-tile .mv {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    word-break: break-all;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .badge-static { background: var(--success-bg); color: var(--success-text); }
+
+  /* Raw string */
+  .raw-wrap { width: 100%; }
+  .raw-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .raw-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .btn-copy {
+    font-size: 11px;
+    font-family: inherit;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .btn-copy:hover { background: var(--surface-alt); }
+
+  .raw-string {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    font-size: 10.5px;
+    font-family: 'Courier New', monospace;
+    color: var(--text-secondary);
+    word-break: break-all;
+    line-height: 1.7;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+
+  .btn-download {
+    width: 100%;
+    height: 38px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .btn-download:hover { background: var(--surface-alt); }
+
+  /* Mobile */
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    .qr-panel {
+      border-left: none;
+      border-top: 1px solid var(--border);
+      position: static;
+      min-height: unset;
+      justify-content: flex-start;
+    }
+    .form-panel { padding: 1.25rem 1rem; }
+    .grid { grid-template-columns: 1fr; }
+    .full { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <svg viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 10c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08A7.16 7.16 0 0110 15z"/></svg>
+  </div>
+  <span class="topbar-title">Pathao Pay</span>
+  <span class="topbar-sub">/ QR Generator</span>
+  <span class="topbar-badge" style="background:var(--accent-bg);color:var(--accent-text);">Dynamic QR</span>
+</div>
+
+<div class="layout">
+
+  <!-- ── LEFT: Form ── -->
+  <div class="form-panel">
+
+    <!-- Merchant Info -->
+    <div class="section-block">
+      <div class="section-title">Merchant info</div>
+      <div class="grid">
+        <div class="field full">
+          <label for="mname">Merchant name</label>
+          <input id="mname" type="text" placeholder="e.g. Pay Test" maxlength="25" value="Pay Test">
+          <span class="hint">Max 25 chars — shown on payer's screen</span>
+        </div>
+        <div class="field">
+          <label for="mcity">Merchant city</label>
+          <input id="mcity" type="text" placeholder="e.g. Dhaka" maxlength="15" value="gdagsafgsf">
+        </div>
+        <div class="field">
+          <label for="mcc">Merchant category (MCC)</label>
+          <select id="mcc">
+            <option value="5812">5812 — Restaurants</option>
+            <option value="5411">5411 — Grocery</option>
+            <option value="5999">5999 — Retail (general)</option>
+            <option value="1010">1010 — Other</option>
+            <option value="4121">4121 — Taxi / transport</option>
+            <option value="7011">7011 — Hotels</option>
+            <option value="5045">5045 — Electronics</option>
+            <option value="6547" selected>6547 — Financial services</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pathao Pay Account -->
+    <div class="section-block">
+      <div class="section-title">Pathao Pay account</div>
+      <div class="grid">
+        <div class="field">
+          <label for="mid">Merchant ID</label>
+          <input id="mid" type="text" placeholder="e.g. 91008100173333633345" maxlength="20" value="91008100173333633345">
+          <span class="hint">From Pathao backend (tag 26.03)</span>
+        </div>
+        <div class="field">
+          <label for="mobile">Mobile number</label>
+          <input id="mobile" type="text" placeholder="e.g. 01733336333" maxlength="11" value="01733336333">
+          <span class="hint">Merchant's registered mobile (tag 62.02)</span>
+        </div>
+        <div class="field">
+          <label for="tid">Terminal ID</label>
+          <input id="tid" type="text" placeholder="e.g. 3ae680ea" maxlength="8" value="3ae680ea">
+          <span class="hint">Device / POS identifier (tag 62.07)</span>
+        </div>
+        <div class="field">
+          <label for="actype">Account type</label>
+          <input id="actype" type="text" placeholder="03" maxlength="4" value="03">
+          <span class="hint">Pathao internal — usually 03 (tag 26.01)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transaction -->
+    <div class="section-block">
+      <div class="section-title">Transaction</div>
+      <div class="grid">
+        <div class="field">
+          <label for="amount">Amount (BDT)</label>
+          <input id="amount" type="number" placeholder="e.g. 351.00" min="0.01" step="0.01">
+          <span class="hint">Fixed amount locked in QR (tag 54)</span>
+        </div>
+        <div class="field">
+          <label for="invoiceid">Invoice ID</label>
+          <input id="invoiceid" type="text" placeholder="e.g. 023844191785123446773878" maxlength="50">
+          <span class="hint">Merchant invoice / billing number (tag 62.01)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixed / hardcoded info -->
+    <div class="section-block">
+      <div class="section-title">Fixed fields (hardcoded)</div>
+      <div class="grid">
+        <div class="field">
+          <label>Point of initiation</label>
+          <input type="text" value="12 — Dynamic QR" disabled style="opacity:.5;cursor:not-allowed;">
+        </div>
+        <div class="field">
+          <label>Currency</label>
+          <input type="text" value="050 — BDT (Taka)" disabled style="opacity:.5;cursor:not-allowed;">
+        </div>
+        <div class="field">
+          <label>Country</label>
+          <input type="text" value="BD — Bangladesh" disabled style="opacity:.5;cursor:not-allowed;">
+        </div>
+        <div class="field">
+          <label>Purpose</label>
+          <input type="text" value="PAYMENT" disabled style="opacity:.5;cursor:not-allowed;">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-generate" onclick="generate()">Generate QR code</button>
+
+  </div>
+
+  <!-- ── RIGHT: QR panel ── -->
+  <div class="qr-panel">
+
+    <!-- Empty state -->
+    <div class="qr-empty" id="qr-empty">
+      <div class="qr-empty-icon">
+        <svg viewBox="0 0 24 24" stroke-width="1.5">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/>
+        </svg>
+      </div>
+      <h3>No QR yet</h3>
+      <p>Fill in the form and click Generate</p>
+    </div>
+
+    <!-- QR result -->
+    <div class="qr-result" id="qr-result">
+      <div class="qr-box">
+        <div id="qr-target"></div>
+      </div>
+      <div class="merchant-badge">
+        <div class="mname" id="out-mname">—</div>
+        <div class="msub"  id="out-msub">—</div>
+      </div>
+      <div class="meta-grid" id="meta-grid"></div>
+      <div class="raw-wrap">
+        <div class="raw-header">
+          <span class="raw-label">EMV QR string</span>
+          <button class="btn-copy" onclick="copyRaw()">Copy</button>
+        </div>
+        <div class="raw-string" id="raw-string"></div>
+      </div>
+      <button class="btn-download" onclick="downloadQR()">⬇ Download QR image</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var lastRaw = '';
+
+  function pad(tag, val) {
+    if (val === null || val === undefined || val === '') return '';
+    var v = String(val);
+    var l = String(v.length).padStart(2, '0');
+    return tag + l + v;
+  }
+
+  function crc16(str) {
+    var crc = 0xFFFF;
+    for (var i = 0; i < str.length; i++) {
+      crc ^= str.charCodeAt(i) << 8;
+      for (var j = 0; j < 8; j++) {
+        crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+        crc &= 0xFFFF;
+      }
+    }
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+  }
+
+  function buildEMV() {
+    var mname     = document.getElementById('mname').value.trim()     || 'Merchant';
+    var mcity     = document.getElementById('mcity').value.trim()     || 'Dhaka';
+    var mcc       = document.getElementById('mcc').value;
+    var mid       = document.getElementById('mid').value.trim();
+    var mobile    = document.getElementById('mobile').value.trim();
+    var tid       = document.getElementById('tid').value.trim();
+    var actype    = document.getElementById('actype').value.trim()    || '03';
+    var amount    = document.getElementById('amount').value.trim();
+    var invoiceid = document.getElementById('invoiceid').value.trim();
+
+    // Hardcoded constants
+    var poi      = '12';   // Dynamic QR
+    var currency = '050';  // BDT
+    var country  = 'BD';
+    var purpose  = 'PAYMENT';
+
+    // Tag 26 — Pathao Pay merchant account info
+    // Structure: 00=GUID, 01=actype, 02=product code, 03=merchant ID
+    var t26inner = pad('00', 'com.pathaopay')
+                 + pad('01', actype)
+                 + pad('02', '1008')
+                 + pad('03', mid);
+    var t26 = pad('26', t26inner);
+
+    // Tag 62 — Additional data
+    // Structure: 01=invoice ID, 02=mobile, 07=terminal ID, 08=purpose
+    var t62inner = '';
+    if (invoiceid) t62inner += pad('01', invoiceid);
+    if (mobile)    t62inner += pad('02', mobile);
+    if (tid)       t62inner += pad('07', tid);
+    t62inner += pad('08', purpose);
+    var t62 = pad('62', t62inner);
+
+    // Assemble full EMV string
+    var qr = '';
+    qr += pad('00', '01');
+    qr += pad('01', poi);
+    qr += t26;
+    qr += pad('52', mcc);
+    qr += pad('53', currency);
+    if (amount) qr += pad('54', parseFloat(amount).toFixed(2));  // tag 54 — amount
+    qr += pad('58', country);
+    qr += pad('59', mname.substring(0, 25));
+    qr += pad('60', mcity.substring(0, 15));
+    qr += t62;
+    qr += '6304';
+    var checksum = crc16(qr);
+    qr += checksum;
+
+    return { qr, mname, mcity, mcc, mid, mobile, tid, amount, invoiceid, checksum };
+  }
+
+  function generate() {
+    var data = buildEMV();
+    lastRaw = data.qr;
+
+    // Show result, hide empty
+    document.getElementById('qr-empty').style.display = 'none';
+    document.getElementById('qr-result').classList.add('visible');
+
+    // Merchant label
+    document.getElementById('out-mname').textContent = data.mname;
+    document.getElementById('out-msub').textContent  = data.mcity + ' · MCC ' + data.mcc;
+
+    // QR code
+    var target = document.getElementById('qr-target');
+    target.innerHTML = '';
+    new QRCode(target, {
+      text: data.qr,
+      width: 210,
+      height: 210,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // Meta tiles
+    var amtDisplay = data.amount ? '৳ ' + parseFloat(data.amount).toFixed(2) : '—';
+    document.getElementById('meta-grid').innerHTML =
+      tile('QR type',    '<span class="badge badge-dynamic">Dynamic</span>') +
+      tile('Amount',      amtDisplay) +
+      tile('Invoice ID',  data.invoiceid || '—') +
+      tile('Mobile',      data.mobile    || '—') +
+      tile('Terminal ID', data.tid       || '—') +
+      tile('CRC-16',      data.checksum);
+
+    document.getElementById('raw-string').textContent = data.qr;
+  }
+
+  function tile(k, v) {
+    return '<div class="meta-tile"><div class="mk">' + k + '</div><div class="mv">' + v + '</div></div>';
+  }
+
+  function copyRaw() {
+    if (!lastRaw) return;
+    navigator.clipboard.writeText(lastRaw).then(function() {
+      var b = document.querySelector('.btn-copy');
+      b.textContent = 'Copied!';
+      setTimeout(function() { b.textContent = 'Copy'; }, 1500);
+    });
+  }
+
+  function downloadQR() {
+    var canvas = document.querySelector('#qr-target canvas');
+    var img    = document.querySelector('#qr-target img');
+    var src    = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+    if (!src) return;
+    var a = document.createElement('a');
+    a.download = 'pathao-qr-' + (document.getElementById('mname').value.trim() || 'merchant') + '.png';
+    a.href = src;
+    a.click();
+  }
+</script>
+</body>
+</html>
